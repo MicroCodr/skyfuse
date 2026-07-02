@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SKYFUSE — Track Fusion</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div id="layout">
+  <div id="map-wrap">
+    <canvas id="map"></canvas>
+    <div id="hud-time">T+0.0s</div>
+  </div>
+  <aside id="panel">
+    <h1>SKYFUSE</h1>
+    <p class="sub">multi-sensor track fusion</p>
+
+    <section>
+      <h2>Sensors</h2>
+      <label class="toggle"><input type="checkbox" id="sen-radar" checked>
+        <span class="dot radar"></span>RADAR <em>range/bearing · clutter</em></label>
+      <label class="toggle"><input type="checkbox" id="sen-eo" checked>
+        <span class="dot eo"></span>EO/IR <em>fine bearing · crude range</em></label>
+      <label class="toggle"><input type="checkbox" id="sen-adsb" checked>
+        <span class="dot adsb"></span>ADS-B <em>cooperative only</em></label>
+    </section>
+
+    <section>
+      <h2>Layers</h2>
+      <label class="toggle"><input type="checkbox" id="lay-truth"> truth (god view)</label>
+      <label class="toggle"><input type="checkbox" id="lay-dets" checked> raw detections</label>
+      <label class="toggle"><input type="checkbox" id="lay-cov" checked> uncertainty ellipses</label>
+    </section>
+
+    <section>
+      <h2>Metrics</h2>
+      <div class="metric"><span>position RMSE</span><b id="m-rmse">—</b></div>
+      <div class="metric"><span>targets tracked</span><b id="m-matched">—</b></div>
+      <div class="metric"><span>missed targets</span><b id="m-missed">—</b></div>
+      <div class="metric"><span>false tracks</span><b id="m-false">—</b></div>
+    </section>
+
+    <section>
+      <h2>Tracks</h2>
+      <table id="tracks">
+        <thead><tr><th>id</th><th>st</th><th>kts</th><th>hdg</th><th>src</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+  </aside>
+</div>
+<script src="/static/app.js"></script>
+</body>
+</html>

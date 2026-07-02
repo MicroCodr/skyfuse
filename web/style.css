@@ -1,0 +1,81 @@
+:root {
+  --bg: #0a0e14;
+  --panel: #0f1520;
+  --line: #1d2736;
+  --text: #c9d4e3;
+  --dim: #5d6b80;
+  --accent: #35e0a1;
+  --radar: #4db8ff;
+  --eo: #ffb84d;
+  --adsb: #b07fff;
+  --track: #35e0a1;
+  --coast: #e0c035;
+  --truth: #ff5d7a;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "SF Mono", "Menlo", "Consolas", monospace;
+  height: 100vh;
+  overflow: hidden;
+}
+
+#layout { display: flex; height: 100vh; }
+
+#map-wrap { flex: 1; position: relative; }
+#map { width: 100%; height: 100%; display: block; }
+
+#hud-time {
+  position: absolute; top: 12px; left: 14px;
+  color: var(--dim); font-size: 13px; letter-spacing: 1px;
+}
+
+#panel {
+  width: 300px;
+  background: var(--panel);
+  border-left: 1px solid var(--line);
+  padding: 18px 16px;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+
+h1 { margin: 0; font-size: 22px; letter-spacing: 4px; color: var(--accent); }
+.sub { margin: 2px 0 14px; color: var(--dim); font-size: 11px; letter-spacing: 1px; }
+
+section { border-top: 1px solid var(--line); padding: 12px 0; }
+h2 {
+  margin: 0 0 8px; font-size: 11px; letter-spacing: 2px;
+  text-transform: uppercase; color: var(--dim);
+}
+
+.toggle {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; padding: 4px 0; cursor: pointer; user-select: none;
+}
+.toggle em { color: var(--dim); font-style: normal; font-size: 10px; margin-left: auto; }
+.toggle input { accent-color: var(--accent); }
+
+.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.dot.radar { background: var(--radar); }
+.dot.eo { background: var(--eo); }
+.dot.adsb { background: var(--adsb); }
+
+.metric {
+  display: flex; justify-content: space-between;
+  font-size: 12px; padding: 3px 0;
+}
+.metric span { color: var(--dim); }
+.metric b { color: var(--text); font-weight: 600; }
+
+#tracks { width: 100%; border-collapse: collapse; font-size: 11px; }
+#tracks th {
+  text-align: left; color: var(--dim); font-weight: normal;
+  padding: 2px 4px; border-bottom: 1px solid var(--line);
+}
+#tracks td { padding: 2px 4px; white-space: nowrap; }
+#tracks tr.coasting td { color: var(--coast); }
+#tracks tr.tentative td { color: var(--dim); }
