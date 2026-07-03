@@ -1,34 +1,22 @@
-"""Global nearest-neighbor data association.
+"""Matching detections to tracks.
 
-Given the current set of tracks and one sensor scan's detections, decide
-which detection belongs to which track. Two stages:
-
-1. Gating — a detection is only a candidate for a track if its squared
-   Mahalanobis distance falls inside a chi-square gate (99%, 2 DOF). This
-   accounts for *both* track uncertainty and sensor noise, so an uncertain
-   coasting track has a wide-open gate while a well-fed track is picky.
-
-2. Assignment — the Hungarian algorithm (scipy's linear_sum_assignment)
-   finds the globally optimal one-to-one pairing. Greedy nearest-neighbor
-   fails when targets cross; global assignment handles it.
+Gate first (mahalanobis distance inside a chi-square threshold), then use
+scipy's hungarian algorithm for the assignment. Tried greedy nearest
+neighbor first but it grabs the wrong detection when two targets cross,
+global assignment fixes that.
 """
-from typing import List, Tuple
-
 import numpy as np
 from scipy.optimize import linear_sum_assignment
 
 BIG = 1e9
 
 
-def associate(tracks: list, detections: list,
-              gate: float) -> Tuple[List[Tuple[int, int]], List[int], List[int]]:
-    """Returns (matches, unmatched_track_idxs, unmatched_detection_idxs).
-
-    matches is a list of (track_index, detection_index) pairs.
-    """
+def associate(tracks, detections, gate):
+    """Returns (matches, unmatched_track_idxs, unmatched_det_idxs)."""
     if not tracks or not detections:
         return [], list(range(len(tracks))), list(range(len(detections)))
 
+    # TODO this is O(tracks * dets), fine at this scale
     cost = np.full((len(tracks), len(detections)), BIG)
     for i, tr in enumerate(tracks):
         for j, det in enumerate(detections):

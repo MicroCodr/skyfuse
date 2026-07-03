@@ -1,11 +1,6 @@
-"""aiohttp server: runs the simulation + fusion in real time and streams
-the tactical picture to browsers over a WebSocket.
-
-Client -> server messages:
-    {"cmd": "toggle_sensor", "sensor": "radar", "enabled": false}
-
-Server -> client (4 Hz): full world snapshot — truth, recent raw
-detections, fused tracks with covariance, sensor status, and metrics.
+"""aiohttp server. Runs the sim + fusion in real time, sends the whole
+world state to the browser over a websocket 4x a second. The browser can
+send back {"cmd": "toggle_sensor", ...} to turn sensors on/off.
 """
 import asyncio
 import json

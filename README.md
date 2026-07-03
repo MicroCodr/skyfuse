@@ -1,77 +1,55 @@
-# SKYFUSE ✈︎
+# skyfuse
 
-**A real-time multi-sensor track fusion engine.** Three simulated sensors with very different error characteristics watch the same airspace; SKYFUSE fuses their asynchronous, noisy, clutter-contaminated measurements into a single coherent set of tracks — and streams the live tactical picture to a browser dashboard.
+A multi-sensor track fusion simulator I built to properly learn Kalman filtering and tracking. Three simulated sensors (radar, EO/IR, ADS-B) watch the same airspace and a fusion engine combines their noisy measurements into unified tracks, displayed on a live web dashboard.
 
-![SKYFUSE dashboard](screenshot.jpg)
+![screenshot](screenshot.jpg)
 
-The core problem here — *many unreliable data sources, one integrated view of the world* — is the heart of data fusion, whether the entities are aircraft, shipping containers, or database records.
+## The idea
 
-## Why these three sensors
+Each sensor is bad in a different way:
 
-Fusion is only interesting when the sources genuinely disagree about what they're good at:
+- **Radar** - decent range, mediocre bearing, false alarms (clutter), sometimes misses targets
+- **EO/IR** - really accurate bearing but terrible range estimates, shorter reach
+- **ADS-B** - super precise but only works on cooperative (transponder) aircraft
 
-| Sensor | Measures | Strength | Weakness |
-|---|---|---|---|
-| **Radar** | range + bearing (polar) | good range accuracy, sees everyone | mediocre bearing, false alarms (clutter), missed detections |
-| **EO/IR** | range + bearing (polar) | superb bearing (0.05°) | terrible range estimate (±1.5 km), shorter reach |
-| **ADS-B** | position (cartesian) | very precise (±30 m) | **cooperative traffic only** — non-transponder targets are invisible to it |
+No single sensor gives the full picture, but fused together they cover each other's weaknesses. You can test this live: uncheck RADAR on the dashboard and watch the uncertainty ellipses grow and the RMSE go up. The one non-cooperative aircraft (invisible to ADS-B) eventually gets dropped. Turn radar back on and it recovers.
 
-No single sensor gives you the full picture. Fused, they cover each other's blind spots — and the dashboard lets you prove it: **toggle the radar off mid-run** and watch uncertainty ellipses balloon, the position RMSE triple, and the one non-cooperative target that only radar could see coast and drop. Toggle it back and watch the picture heal.
+## How it works
 
-## Architecture
+Every sensor scan goes through the same steps:
 
-```mermaid
-flowchart LR
-    SIM[Truth simulation<br/>8 maneuvering aircraft] --> R[Radar 1 Hz]
-    SIM --> E[EO/IR 0.67 Hz]
-    SIM --> A[ADS-B 1 Hz]
-    R -->|"polar z, clutter"| F
-    E -->|"polar z"| F
-    A -->|"cartesian z"| F
-    subgraph F[Fusion engine]
-        G[Mahalanobis gating] --> H[Hungarian assignment]
-        H --> K[EKF update per track]
-        K --> L[Track lifecycle<br/>tentative → confirmed → coasting]
-    end
-    F -->|WebSocket 4 Hz| D[Browser dashboard]
-    SIM -.->|scoring only| M[Metrics: RMSE, false tracks]
-```
+1. Predict all tracks forward to the scan's timestamp (constant velocity model)
+2. Gate: a detection only counts as a candidate for a track if its Mahalanobis distance is inside a chi-square gate
+3. Assign detections to tracks with the Hungarian algorithm (scipy) - global assignment instead of greedy so it doesn't break when targets cross paths
+4. Update matched tracks with an EKF. Radar/EO measurements are polar (range, bearing) so those go through a linearized update, ADS-B is cartesian so it's a normal linear update. Both update the same state, which is basically the whole fusion trick
+5. Unmatched detections start new "tentative" tracks. 4 hits confirms a track, going silent for a while makes it coast and then get dropped. Radar clutter constantly creates tentative tracks but they die before confirming since random false alarms don't line up scan after scan
 
-Each sensor scan — whenever it arrives, whatever it measures — flows through the same pipeline:
+The tracker never sees the truth data - truth is only used by the metrics module to score the results (RMSE, missed targets, false tracks) shown on the dashboard.
 
-1. **Predict** every track forward to the scan timestamp (constant-velocity model with white-noise acceleration). This is what makes *asynchronous* fusion work: a track state is always propagated to measurement time before comparison.
-2. **Gate** — a detection is a candidate for a track only if its squared Mahalanobis distance `νᵀS⁻¹ν` is inside a χ² 99% gate. The gate accounts for both track uncertainty and sensor noise, so a starving track opens up its gate while a well-fed one stays picky.
-3. **Assign** — the Hungarian algorithm finds the globally optimal one-to-one track↔detection pairing. Greedy nearest-neighbor breaks when targets cross paths; global assignment doesn't.
-4. **Update** — the Extended Kalman Filter fuses the measurement into the track state. Two measurement models share one state vector: cartesian (linear, ADS-B) and polar (nonlinear, linearized around the estimate — radar and EO/IR).
-5. **Lifecycle** — unmatched detections seed *tentative* tracks; four consistent hits confirm; 2.5 silent seconds put a track into *coasting* (predict-only); 6 seconds drop it. Radar clutter constantly spawns tentative tracks that die before confirmation, because random false alarms don't line up scan after scan.
+A couple of bugs I hit that turned into tests:
+- bearing innovation needs to be wrapped to [-pi, pi] or tracks blow up when a target crosses the +/-180 line behind the sensor
+- the covariance update needs the Joseph form or P slowly stops being symmetric after enough updates
 
-
-
-## Running it
+## Running
 
 ```bash
 pip install -r requirements.txt
-python run.py            # then open http://localhost:8777
-python run.py --seed 42  # reproducible scenario
+python run.py
+# open http://localhost:8777
 ```
 
 Tests:
 
 ```bash
-python -m pytest tests/ -v
+python -m pytest tests/
 ```
 
-The suite covers EKF convergence and consistency, the bearing-wrap edge case, gating behavior, the global-vs-greedy assignment case, track confirm/coast/drop lifecycle, and that scattered clutter never confirms into a false track.
+## Stuff I want to add
 
-## Things I'd build next
+- IMM (multiple motion models) - the single CV filter visibly lags when a target does a hard turn
+- treat the EO sensor as bearing-only, which is how IRST actually works
+- sensor bias estimation
 
-- **IMM (Interacting Multiple Model)** — run CV and coordinated-turn models in parallel and mix them; the single CV filter visibly lags during hard turns (watch a track during a maneuver).
-- **Track-to-track fusion** — this engine fuses at the measurement level (centralized); a distributed variant would fuse per-sensor tracklets with covariance intersection.
-- **Bearing-only EO** — treat EO/IR honestly as an angle-only sensor and let range become observable through geometry over time.
-- **Sensor bias estimation** — augment the state to estimate and remove a miscalibrated sensor's systematic offset.
+Mostly learned from Bar-Shalom's *Estimation with Applications to Tracking and Navigation* + various lecture notes.
 
-## Honesty notes
-
-Everything here is textbook, public-domain estimation theory (Bar-Shalom et al., *Estimation with Applications to Tracking and Navigation*). The scenario, sensor characteristics, and code are entirely synthetic and my own.
-
-MIT — see [LICENSE](LICENSE).
+MIT license.

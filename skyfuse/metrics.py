@@ -1,8 +1,6 @@
-"""Live accuracy metrics: compare the fused picture against the truth.
-
-The tracker never sees these — truth is only used for scoring. Confirmed
-tracks are greedily matched to the nearest truth aircraft within a fixed
-radius; position RMSE is computed over the matched pairs.
+"""Scores the tracker against the truth (which the tracker itself never
+sees). Tracks get matched to the nearest truth aircraft within 2km,
+closest pairs first, then RMSE over the matched ones.
 """
 import math
 from typing import List

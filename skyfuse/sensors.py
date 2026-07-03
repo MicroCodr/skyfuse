@@ -1,16 +1,10 @@
-"""Sensor models. Each produces noisy, imperfect measurements of the truth.
+"""The three sensor models. Each one is bad in a different way (radar has
+clutter + so-so bearing, EO has great bearing but bad range, ADS-B is
+precise but only sees cooperative aircraft) so the fusion actually has
+something to do.
 
-Three deliberately different sensors so fusion has something to do:
-
-* Radar    — range/bearing (polar), good range, mediocre bearing, plus
-             clutter (false alarms) and missed detections.
-* EO/IR    — polar as well, but the opposite error profile: excellent
-             bearing, very crude range. Shorter maximum range.
-* ADS-B    — direct cartesian position reports, very accurate, but only
-             cooperative (transponder-equipped) aircraft ever produce them.
-
-Measurements never carry the truth identity — associating them back into
-coherent tracks is the fusion engine's job.
+Note detections don't carry the aircraft id - figuring out which
+measurement belongs to which track is the tracker's job.
 """
 import math
 import random

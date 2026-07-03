@@ -1,8 +1,6 @@
-"""Ground-truth world model: aircraft flying waypoint-free patrol patterns.
-
-Aircraft fly straight at constant speed, occasionally performing coordinated
-turns. If one approaches the edge of the surveillance area it is commanded
-to turn back toward the center, so the scenario runs forever.
+"""Ground truth: aircraft flying around, mostly straight with random turns.
+They steer back toward the center when they get near the edge so the sim
+can run forever.
 """
 import math
 import random

@@ -1,33 +1,21 @@
-"""Extended Kalman filter for a 2D constant-velocity target.
+"""EKF for a 2D target. State is [px, py, vx, vy].
 
-State vector: x = [px, py, vx, vy]
-
-Two measurement models are supported, which is what makes this a *fusion*
-filter — measurements from different sensors flow through the same state:
-
-* cartesian  z = [px, py]           (linear — ADS-B)
-* polar      z = [range, bearing]   (nonlinear — radar, EO/IR)
-
-The polar update linearizes h(x) around the current estimate (the "E" in
-EKF) and wraps the bearing innovation to [-pi, pi] — skipping that wrap is
-the classic bug that makes tracks explode when a target crosses the -pi/pi
-boundary behind the sensor.
+Handles two measurement types so different sensors can update the same
+track: cartesian (x, y) from ADS-B and polar (range, bearing) from
+radar/EO. The polar one is the nonlinear case, that's the "extended" part.
 """
 import math
-from typing import Tuple
 
 import numpy as np
 
 
 class EKF:
-    def __init__(self, x0: np.ndarray, P0: np.ndarray):
+    def __init__(self, x0, P0):
         self.x = x0.astype(float).copy()
         self.P = P0.astype(float).copy()
 
-    # --- prediction ------------------------------------------------------
-
-    def predict(self, dt: float, sigma_a: float) -> None:
-        """Propagate with a constant-velocity model + white-noise acceleration."""
+    def predict(self, dt, sigma_a):
+        # constant velocity model, process noise = white noise acceleration
         F = np.array([[1, 0, dt, 0],
                       [0, 1, 0, dt],
                       [0, 0, 1, 0],
@@ -41,61 +29,57 @@ class EKF:
         self.x = F @ self.x
         self.P = F @ self.P @ F.T + Q
 
-    # --- measurement models ----------------------------------------------
-
-    def innovation_cart(self, z: np.ndarray, R: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def innovation_cart(self, z, R):
         H = np.array([[1, 0, 0, 0],
                       [0, 1, 0, 0]], dtype=float)
         nu = z - H @ self.x
         S = H @ self.P @ H.T + R
         return nu, S, H
 
-    def innovation_polar(self, z: np.ndarray, R: np.ndarray,
-                         sensor_pos: Tuple[float, float]) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def innovation_polar(self, z, R, sensor_pos):
         dx = self.x[0] - sensor_pos[0]
         dy = self.x[1] - sensor_pos[1]
         r = math.hypot(dx, dy)
         r = max(r, 1e-6)
         h = np.array([r, math.atan2(dy, dx)])
+        # jacobian of h(x) around the current estimate
         H = np.array([[dx / r, dy / r, 0, 0],
                       [-dy / r ** 2, dx / r ** 2, 0, 0]])
         nu = z - h
-        nu[1] = _wrap(nu[1])                    # bearing innovation wrap
+        # wrap the bearing residual! learned this the hard way, without it
+        # tracks explode when a target crosses the +/-pi line
+        nu[1] = _wrap(nu[1])
         S = H @ self.P @ H.T + R
         return nu, S, H
 
-    def innovation(self, det) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def innovation(self, det):
         if det.kind == 'cart':
             return self.innovation_cart(det.z, det.R)
         return self.innovation_polar(det.z, det.R, det.sensor_pos)
 
-    def mahalanobis2(self, det) -> float:
-        """Squared Mahalanobis distance of a detection from the track."""
+    def mahalanobis2(self, det):
         nu, S, _ = self.innovation(det)
         return float(nu @ np.linalg.solve(S, nu))
 
-    # --- update ------------------------------------------------------------
-
-    def update(self, det) -> None:
+    def update(self, det):
         nu, S, H = self.innovation(det)
         K = self.P @ H.T @ np.linalg.inv(S)
         self.x = self.x + K @ nu
-        # Joseph form: numerically stable, keeps P symmetric positive-definite
+        # Joseph form update, keeps P symmetric (the simple form drifts)
         I_KH = np.eye(4) - K @ H
         self.P = I_KH @ self.P @ I_KH.T + K @ det.R @ K.T
 
-    # --- init helpers --------------------------------------------------------
-
     @classmethod
-    def from_detection(cls, det, vel_sigma: float) -> 'EKF':
-        """Start a track from a single detection: measured position,
-        unknown velocity (zero mean, large covariance)."""
+    def from_detection(cls, det, vel_sigma):
+        """Start a track from one detection. Position from the measurement,
+        velocity unknown so zero with a big covariance."""
         px, py = det.position()
         x0 = np.array([px, py, 0.0, 0.0])
         if det.kind == 'cart':
             P_pos = det.R.copy()
         else:
-            # push polar noise through the polar->cartesian jacobian
+            # convert the polar noise to cartesian with the jacobian, so a
+            # far away detection starts with appropriately wide uncertainty
             r, th = float(det.z[0]), float(det.z[1])
             J = np.array([[math.cos(th), -r * math.sin(th)],
                           [math.sin(th), r * math.cos(th)]])
@@ -106,5 +90,5 @@ class EKF:
         return cls(x0, P0)
 
 
-def _wrap(angle: float) -> float:
+def _wrap(angle):
     return math.atan2(math.sin(angle), math.cos(angle))

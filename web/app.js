@@ -23,7 +23,7 @@ let world = null;
 
 function connect() {
   const ws = new WebSocket(`ws://${location.host}/ws`);
-  ws.onmessage = e => { world = JSON.parse(e.data); };
+  ws.onmessage = e => { world = JSON.parse(e.data); updateTrails(); };
   ws.onclose = () => setTimeout(connect, 1000);
 
   for (const name of ['radar', 'eo', 'adsb']) {
@@ -50,6 +50,49 @@ resize();
 const sx = x => ox + x * scale;
 const sy = y => oy - y * scale;                 // north up
 
+// --- track trails ------------------------------------------------------------
+// keep a breadcrumb history per track id so you can see where each track
+// has been (also makes the CV filter lagging in turns really obvious)
+
+const TRAIL_LEN = 60;
+const trails = new Map();
+
+function updateTrails() {
+  if (!world) return;
+  const alive = new Set();
+  for (const t of world.tracks) {
+    if (t.status === 'tentative') continue;
+    alive.add(t.id);
+    let pts = trails.get(t.id);
+    if (!pts) { pts = []; trails.set(t.id, pts); }
+    const last = pts[pts.length - 1];
+    // only add a point if the track actually moved a bit
+    if (!last || Math.hypot(t.x - last[0], t.y - last[1]) > 40) {
+      pts.push([t.x, t.y]);
+      if (pts.length > TRAIL_LEN) pts.shift();
+    }
+  }
+  // forget trails of tracks that got dropped
+  for (const id of trails.keys()) {
+    if (!alive.has(id)) trails.delete(id);
+  }
+}
+
+function drawTrails() {
+  ctx.lineWidth = 1 * devicePixelRatio;
+  for (const pts of trails.values()) {
+    for (let i = 1; i < pts.length; i++) {
+      ctx.globalAlpha = (i / pts.length) * 0.45;   // fade out the old end
+      ctx.strokeStyle = COLORS.track;
+      ctx.beginPath();
+      ctx.moveTo(sx(pts[i - 1][0]), sy(pts[i - 1][1]));
+      ctx.lineTo(sx(pts[i][0]), sy(pts[i][1]));
+      ctx.stroke();
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
 // --- rendering ---------------------------------------------------------------
 
 function draw() {
@@ -61,6 +104,7 @@ function draw() {
 
   drawSensorSites();
   if (document.getElementById('lay-dets').checked) drawDetections();
+  if (document.getElementById('lay-trails').checked) drawTrails();
   if (document.getElementById('lay-truth').checked) drawTruth();
   drawTracks();
   updatePanel();
