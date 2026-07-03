@@ -45,12 +45,7 @@ Each sensor scan — whenever it arrives, whatever it measures — flows through
 4. **Update** — the Extended Kalman Filter fuses the measurement into the track state. Two measurement models share one state vector: cartesian (linear, ADS-B) and polar (nonlinear, linearized around the estimate — radar and EO/IR).
 5. **Lifecycle** — unmatched detections seed *tentative* tracks; four consistent hits confirm; 2.5 silent seconds put a track into *coasting* (predict-only); 6 seconds drop it. Radar clutter constantly spawns tentative tracks that die before confirmation, because random false alarms don't line up scan after scan.
 
-### Details that matter
 
-- **Bearing innovation wrapping** — the polar update wraps the bearing residual to [-π, π]. Skip that and tracks explode the moment a target crosses the ±π seam behind the sensor. There's a regression test for it.
-- **Joseph-form covariance update** — keeps `P` symmetric positive-definite over thousands of updates instead of slowly rotting from floating-point asymmetry.
-- **Range-dependent initialization** — a new track born from a polar detection pushes the sensor's (σ_r, σ_θ) noise through the polar→cartesian Jacobian, so a far detection correctly starts with a wide, banana-oriented position covariance.
-- **Truth never leaks** — the tracker sees only measurements. Truth is used exclusively by the metrics module to score the fused picture (RMSE, missed targets, false tracks) live on the dashboard.
 
 ## Running it
 
